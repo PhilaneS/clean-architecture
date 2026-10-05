@@ -5,7 +5,7 @@ namespace IntegrationTests.Todos;
 
 public sealed class TodosTests(IntegrationTestWebAppFactory factory) : BaseIntegrationTest(factory)
 {
-    private sealed record TodoDto(Guid Id, Guid UserId, string Description, bool IsCompleted);
+    private sealed record TodoDto(Guid Id, Guid UserId, string Description, string? Notes, bool IsCompleted);
 
     [Fact]
     public async Task GetTodo_Should_ReturnUnauthorized_WhenTokenIsMissing()
@@ -28,6 +28,7 @@ public sealed class TodosTests(IntegrationTestWebAppFactory factory) : BaseInteg
         {
             userId,
             description = "Integration test todo",
+            notes = "Integration test note",
             labels = new[] { "integration" },
             priority = 2
         };
@@ -47,7 +48,42 @@ public sealed class TodosTests(IntegrationTestWebAppFactory factory) : BaseInteg
         todo!.Id.ShouldBe(todoId);
         todo.UserId.ShouldBe(userId);
         todo.Description.ShouldBe("Integration test todo");
+        todo.Notes.ShouldBe("Integration test note");
         todo.IsCompleted.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateTodo_Should_PreserveNotes_WhenNotesIsOmitted()
+    {
+        // Arrange
+        (Guid userId, AccessTokens tokens) = await RegisterAndLoginAsync();
+        Authenticate(tokens.AccessToken);
+
+        var createRequest = new
+        {
+            userId,
+            description = "Todo with a note",
+            notes = "Keep this note",
+            labels = Array.Empty<string>(),
+            priority = 1
+        };
+        HttpResponseMessage createResponse = await HttpClient.PostAsJsonAsync("todos", createRequest);
+        createResponse.EnsureSuccessStatusCode();
+        Guid todoId = await createResponse.Content.ReadFromJsonAsync<Guid>();
+
+        // Act
+        HttpResponseMessage updateResponse = await HttpClient.PutAsJsonAsync(
+            $"todos/{todoId}",
+            new { description = "Updated description" });
+
+        // Assert
+        updateResponse.EnsureSuccessStatusCode();
+
+        HttpResponseMessage getResponse = await HttpClient.GetAsync($"todos/{todoId}");
+        getResponse.EnsureSuccessStatusCode();
+        TodoDto? todo = await getResponse.Content.ReadFromJsonAsync<TodoDto>();
+        todo!.Description.ShouldBe("Updated description");
+        todo.Notes.ShouldBe("Keep this note");
     }
 
     [Fact]

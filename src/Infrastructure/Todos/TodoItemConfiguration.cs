@@ -12,6 +12,7 @@ internal sealed class TodoItemConfiguration : IEntityTypeConfiguration<TodoItem>
         builder.HasKey(t => t.Id);
 
         builder.Property(t => t.DueDate).HasConversion(d => d != null ? DateTime.SpecifyKind(d.Value, DateTimeKind.Utc) : d, v => v);
+        builder.Property(t => t.Notes).HasMaxLength(1000);
 
         builder.HasOne<User>().WithMany().HasForeignKey(t => t.UserId);
     }

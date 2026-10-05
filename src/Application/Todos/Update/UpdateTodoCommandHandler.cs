@@ -27,6 +27,10 @@ internal sealed class UpdateTodoCommandHandler(
         }
 
         todoItem.Description = command.Description;
+        if (command.Notes is not null)
+        {
+            todoItem.Notes = command.Notes;
+        }
 
         todoItem.Raise(new TodoItemUpdatedDomainEvent(todoItem.Id));
 

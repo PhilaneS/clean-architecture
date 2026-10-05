@@ -34,6 +34,7 @@ internal sealed class CreateTodoCommandHandler(
             Id = Guid.NewGuid(),
             UserId = user.Id,
             Description = command.Description,
+            Notes = command.Notes,
             Priority = command.Priority,
             DueDate = command.DueDate,
             Labels = command.Labels,

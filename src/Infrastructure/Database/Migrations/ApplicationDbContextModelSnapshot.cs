@@ -57,6 +57,11 @@ namespace Infrastructure.Database.Migrations
                         .HasColumnType("text[]")
                         .HasColumnName("labels");
 
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("notes");
+
                     b.Property<int>("Priority")
                         .HasColumnType("integer")
                         .HasColumnName("priority");

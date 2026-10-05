@@ -42,6 +42,22 @@ public sealed class TodoValidatorsTests
     }
 
     [Fact]
+    public void CreateValidator_Should_HaveError_WhenNotesExceedsMaxLength()
+    {
+        var command = new CreateTodoCommand
+        {
+            UserId = Guid.NewGuid(),
+            Description = "Buy groceries",
+            Notes = new string('a', 1001),
+            Priority = Priority.Low
+        };
+
+        TestValidationResult<CreateTodoCommand> result = _createValidator.TestValidate(command);
+
+        result.ShouldHaveValidationErrorFor(c => c.Notes);
+    }
+
+    [Fact]
     public void UpdateValidator_Should_HaveError_WhenDescriptionExceedsMaxLength()
     {
         var command = new UpdateTodoCommand(Guid.NewGuid(), new string('a', 501));
@@ -59,5 +75,25 @@ public sealed class TodoValidatorsTests
         TestValidationResult<UpdateTodoCommand> result = _updateValidator.TestValidate(command);
 
         result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void UpdateValidator_Should_HaveError_WhenNotesExceedsMaxLength()
+    {
+        var command = new UpdateTodoCommand(Guid.NewGuid(), "Updated description", new string('a', 1001));
+
+        TestValidationResult<UpdateTodoCommand> result = _updateValidator.TestValidate(command);
+
+        result.ShouldHaveValidationErrorFor(c => c.Notes);
+    }
+
+    [Fact]
+    public void UpdateValidator_Should_NotHaveError_WhenNotesIsEmpty()
+    {
+        var command = new UpdateTodoCommand(Guid.NewGuid(), "Updated description", string.Empty);
+
+        TestValidationResult<UpdateTodoCommand> result = _updateValidator.TestValidate(command);
+
+        result.ShouldNotHaveValidationErrorFor(c => c.Notes);
     }
 }

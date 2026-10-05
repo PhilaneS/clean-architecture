@@ -4,4 +4,5 @@ namespace Application.Todos.Update;
 
 public sealed record UpdateTodoCommand(
     Guid TodoItemId,
-    string Description) : ICommand;
+    string Description,
+    string? Notes = null) : ICommand;

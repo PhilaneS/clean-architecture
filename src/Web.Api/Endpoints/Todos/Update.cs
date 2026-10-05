@@ -8,7 +8,7 @@ namespace Web.Api.Endpoints.Todos;
 
 internal sealed class Update : IEndpoint
 {
-    public sealed record Request(string Description);
+    public sealed record Request(string Description, string? Notes = null);
 
     public void MapEndpoint(IEndpointRouteBuilder app)
     {
@@ -18,7 +18,7 @@ internal sealed class Update : IEndpoint
             ICommandHandler<UpdateTodoCommand> handler,
             CancellationToken cancellationToken) =>
         {
-            var command = new UpdateTodoCommand(id, request.Description);
+            var command = new UpdateTodoCommand(id, request.Description, request.Notes);
 
             Result result = await handler.Handle(command, cancellationToken);
 

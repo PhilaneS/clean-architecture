@@ -13,6 +13,7 @@ internal sealed class Create : IEndpoint
     {
         public Guid UserId { get; set; }
         public string Description { get; set; }
+        public string? Notes { get; set; }
         public DateTime? DueDate { get; set; }
         public List<string> Labels { get; set; } = [];
         public int Priority { get; set; }
@@ -29,6 +30,7 @@ internal sealed class Create : IEndpoint
             {
                 UserId = request.UserId,
                 Description = request.Description,
+                Notes = request.Notes,
                 DueDate = request.DueDate,
                 Labels = request.Labels,
                 Priority = (Priority)request.Priority

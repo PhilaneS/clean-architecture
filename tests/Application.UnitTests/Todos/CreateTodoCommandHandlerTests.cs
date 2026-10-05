@@ -16,6 +16,7 @@ public sealed class CreateTodoCommandHandlerTests : BaseHandlerTest
     {
         UserId = UserId,
         Description = "Write unit tests",
+        Notes = "Check saved data",
         Priority = Priority.Medium,
         Labels = ["work"]
     };
@@ -88,6 +89,7 @@ public sealed class CreateTodoCommandHandlerTests : BaseHandlerTest
 
         TodoItem todoItem = await context.TodoItems.SingleAsync(t => t.Id == result.Value);
         todoItem.Description.ShouldBe("Write unit tests");
+        todoItem.Notes.ShouldBe("Check saved data");
         todoItem.UserId.ShouldBe(UserId);
         todoItem.DomainEvents.ShouldContain(domainEvent => domainEvent is TodoItemCreatedDomainEvent);
     }
