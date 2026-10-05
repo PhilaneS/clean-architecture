@@ -87,6 +87,69 @@ public sealed class TodosTests(IntegrationTestWebAppFactory factory) : BaseInteg
     }
 
     [Fact]
+    public async Task GetTodos_Should_FilterByCompletionStatus_WhenIsCompletedIsSpecified()
+    {
+        // Arrange
+        (Guid userId, AccessTokens tokens) = await RegisterAndLoginAsync();
+        Authenticate(tokens.AccessToken);
+
+        var completedTodoRequest = new
+        {
+            userId,
+            description = "Completed todo",
+            labels = Array.Empty<string>(),
+            priority = 1
+        };
+        HttpResponseMessage completedCreateResponse =
+            await HttpClient.PostAsJsonAsync("todos", completedTodoRequest);
+        completedCreateResponse.EnsureSuccessStatusCode();
+        Guid completedTodoId = await completedCreateResponse.Content.ReadFromJsonAsync<Guid>();
+
+        var incompleteTodoRequest = new
+        {
+            userId,
+            description = "Incomplete todo",
+            labels = Array.Empty<string>(),
+            priority = 1
+        };
+        HttpResponseMessage incompleteCreateResponse =
+            await HttpClient.PostAsJsonAsync("todos", incompleteTodoRequest);
+        incompleteCreateResponse.EnsureSuccessStatusCode();
+        Guid incompleteTodoId = await incompleteCreateResponse.Content.ReadFromJsonAsync<Guid>();
+
+        HttpResponseMessage completeResponse =
+            await HttpClient.PutAsync($"todos/{completedTodoId}/complete", null);
+        completeResponse.EnsureSuccessStatusCode();
+
+        // Act
+        HttpResponseMessage allResponse = await HttpClient.GetAsync($"todos?userId={userId}");
+        HttpResponseMessage completedResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&isCompleted=true");
+        HttpResponseMessage incompleteResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&isCompleted=false");
+
+        // Assert
+        allResponse.EnsureSuccessStatusCode();
+        completedResponse.EnsureSuccessStatusCode();
+        incompleteResponse.EnsureSuccessStatusCode();
+
+        List<TodoDto>? allTodos = await allResponse.Content.ReadFromJsonAsync<List<TodoDto>>();
+        List<TodoDto>? completedTodos = await completedResponse.Content.ReadFromJsonAsync<List<TodoDto>>();
+        List<TodoDto>? incompleteTodos = await incompleteResponse.Content.ReadFromJsonAsync<List<TodoDto>>();
+
+        allTodos!.Count.ShouldBe(2);
+        allTodos.ShouldAllBe(todo => todo.UserId == userId);
+
+        completedTodos!.Count.ShouldBe(1);
+        completedTodos.ShouldAllBe(todo => todo.UserId == userId && todo.IsCompleted);
+        completedTodos[0].Id.ShouldBe(completedTodoId);
+
+        incompleteTodos!.Count.ShouldBe(1);
+        incompleteTodos.ShouldAllBe(todo => todo.UserId == userId && !todo.IsCompleted);
+        incompleteTodos[0].Id.ShouldBe(incompleteTodoId);
+    }
+
+    [Fact]
     public async Task CompleteTodo_Should_MarkTodoAsCompleted()
     {
         // Arrange

@@ -17,8 +17,15 @@ internal sealed class GetTodosQueryHandler(IApplicationDbContext context, IUserC
             return Result.Failure<List<TodoResponse>>(UserErrors.Unauthorized());
         }
 
-        List<TodoResponse> todos = await context.TodoItems
-            .Where(todoItem => todoItem.UserId == query.UserId)
+        IQueryable<Domain.Todos.TodoItem> todoItems = context.TodoItems
+            .Where(todoItem => todoItem.UserId == query.UserId);
+
+        if (query.IsCompleted.HasValue)
+        {
+            todoItems = todoItems.Where(todoItem => todoItem.IsCompleted == query.IsCompleted.Value);
+        }
+
+        List<TodoResponse> todos = await todoItems
             .Select(todoItem => new TodoResponse
             {
                 Id = todoItem.Id,

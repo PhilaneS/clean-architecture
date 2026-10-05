@@ -12,10 +12,11 @@ internal sealed class Get : IEndpoint
     {
         app.MapGet("todos", async (
             Guid userId,
+            bool? isCompleted,
             IQueryHandler<GetTodosQuery, List<TodoResponse>> handler,
             CancellationToken cancellationToken) =>
         {
-            var query = new GetTodosQuery(userId);
+            var query = new GetTodosQuery(userId, isCompleted);
 
             Result<List<TodoResponse>> result = await handler.Handle(query, cancellationToken);
 
