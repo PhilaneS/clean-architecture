@@ -7,7 +7,10 @@ using SharedKernel;
 
 namespace Application.Todos.Get;
 
-internal sealed class GetTodosQueryHandler(IApplicationDbContext context, IUserContext userContext)
+internal sealed class GetTodosQueryHandler(
+    IApplicationDbContext context,
+    IUserContext userContext,
+    ITodoSearch todoSearch)
     : IQueryHandler<GetTodosQuery, GetTodosResponse>
 {
     public async Task<Result<GetTodosResponse>> Handle(GetTodosQuery query, CancellationToken cancellationToken)
@@ -23,6 +26,12 @@ internal sealed class GetTodosQueryHandler(IApplicationDbContext context, IUserC
         if (query.IsCompleted.HasValue)
         {
             todoItems = todoItems.Where(todoItem => todoItem.IsCompleted == query.IsCompleted.Value);
+        }
+
+        string? search = query.Search?.Trim();
+        if (!string.IsNullOrEmpty(search))
+        {
+            todoItems = todoSearch.Apply(todoItems, search);
         }
 
         int totalCount = await todoItems.CountAsync(cancellationToken);

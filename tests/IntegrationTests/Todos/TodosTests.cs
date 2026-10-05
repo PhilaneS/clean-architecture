@@ -174,6 +174,99 @@ public sealed class TodosTests(IntegrationTestWebAppFactory factory) : BaseInteg
         incompleteTodos.Items[0].Id.ShouldBe(incompleteTodoId);
     }
 
+    [Fact]
+    public async Task GetTodos_Should_SearchLiteralsCaseInsensitivelyAndComposeWithFilters()
+    {
+        // Arrange
+        (Guid userId, AccessTokens tokens) = await RegisterAndLoginAsync();
+        Authenticate(tokens.AccessToken);
+
+        Guid descriptionMatchId = await CreateTodoAsync(
+            userId,
+            "Prepare Release Plan 100%_ready!",
+            "Review deployment checklist");
+        await CreateTodoAsync(userId, "Unrelated book");
+        Guid completedMatchId = await CreateTodoAsync(userId, "Completed release task");
+        HttpResponseMessage completeResponse =
+            await HttpClient.PutAsync($"todos/{completedMatchId}/complete", null);
+        completeResponse.EnsureSuccessStatusCode();
+
+        Guid underscoreMatchId = await CreateTodoAsync(userId, "An under_score example");
+        Guid exclamationMatchId = await CreateTodoAsync(userId, "An exclamation! example");
+
+        (Guid otherUserId, AccessTokens otherUserTokens) = await RegisterAndLoginAsync();
+        Authenticate(otherUserTokens.AccessToken);
+        await CreateTodoAsync(otherUserId, "Another user's release task");
+        Authenticate(tokens.AccessToken);
+
+        // Act
+        HttpResponseMessage descriptionResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&search=%20%20rElEaSe%20%20&page=1&pageSize=1");
+        HttpResponseMessage notesResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&search=DEPLOYMENT");
+        HttpResponseMessage completedResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&isCompleted=true&search=release");
+        HttpResponseMessage incompleteResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&isCompleted=false&search=release");
+        HttpResponseMessage percentResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&search={Uri.EscapeDataString("100%")}");
+        HttpResponseMessage underscoreResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&search={Uri.EscapeDataString("_")}");
+        HttpResponseMessage escapeResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&search={Uri.EscapeDataString("!")}");
+        HttpResponseMessage noNotesMatchResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&search=missing-note-text");
+        HttpResponseMessage noSearchResponse = await HttpClient.GetAsync($"todos?userId={userId}");
+        HttpResponseMessage blankSearchResponse =
+            await HttpClient.GetAsync($"todos?userId={userId}&search=%20%20%20");
+
+        // Assert
+        descriptionResponse.EnsureSuccessStatusCode();
+        notesResponse.EnsureSuccessStatusCode();
+        completedResponse.EnsureSuccessStatusCode();
+        incompleteResponse.EnsureSuccessStatusCode();
+        percentResponse.EnsureSuccessStatusCode();
+        underscoreResponse.EnsureSuccessStatusCode();
+        escapeResponse.EnsureSuccessStatusCode();
+        noNotesMatchResponse.EnsureSuccessStatusCode();
+        noSearchResponse.EnsureSuccessStatusCode();
+        blankSearchResponse.EnsureSuccessStatusCode();
+
+        PagedTodosDto? descriptionResults =
+            await descriptionResponse.Content.ReadFromJsonAsync<PagedTodosDto>();
+        PagedTodosDto? notesResults =
+            await notesResponse.Content.ReadFromJsonAsync<PagedTodosDto>();
+        PagedTodosDto? completedResults =
+            await completedResponse.Content.ReadFromJsonAsync<PagedTodosDto>();
+        PagedTodosDto? incompleteResults =
+            await incompleteResponse.Content.ReadFromJsonAsync<PagedTodosDto>();
+
+        descriptionResults!.TotalCount.ShouldBe(2);
+        descriptionResults.TotalPages.ShouldBe(2);
+        descriptionResults.Items.Count.ShouldBe(1);
+        descriptionResults.Items.ShouldAllBe(todo => todo.UserId == userId);
+        notesResults!.TotalCount.ShouldBe(1);
+        notesResults.Items.Select(todo => todo.Id).ShouldBe([descriptionMatchId]);
+        completedResults!.TotalCount.ShouldBe(1);
+        completedResults.Items.Select(todo => todo.Id).ShouldBe([completedMatchId]);
+        incompleteResults!.TotalCount.ShouldBe(1);
+        incompleteResults.Items.Select(todo => todo.Id).ShouldBe([descriptionMatchId]);
+
+        (await percentResponse.Content.ReadFromJsonAsync<PagedTodosDto>())!.Items
+            .Select(todo => todo.Id).ShouldBe([descriptionMatchId]);
+        (await underscoreResponse.Content.ReadFromJsonAsync<PagedTodosDto>())!.Items
+            .Select(todo => todo.Id).ShouldBe(
+                [underscoreMatchId, descriptionMatchId],
+                ignoreOrder: true);
+        (await escapeResponse.Content.ReadFromJsonAsync<PagedTodosDto>())!.Items
+            .Select(todo => todo.Id).ShouldBe(
+                [exclamationMatchId, descriptionMatchId],
+                ignoreOrder: true);
+        (await noNotesMatchResponse.Content.ReadFromJsonAsync<PagedTodosDto>())!.TotalCount.ShouldBe(0);
+        (await noSearchResponse.Content.ReadFromJsonAsync<PagedTodosDto>())!.TotalCount.ShouldBe(5);
+        (await blankSearchResponse.Content.ReadFromJsonAsync<PagedTodosDto>())!.TotalCount.ShouldBe(5);
+    }
+
     [Theory]
     [InlineData("page=0", "page")]
     [InlineData("pageSize=0", "pageSize")]
@@ -223,5 +316,22 @@ public sealed class TodosTests(IntegrationTestWebAppFactory factory) : BaseInteg
         getResponse.EnsureSuccessStatusCode();
         TodoDto? todo = await getResponse.Content.ReadFromJsonAsync<TodoDto>();
         todo!.IsCompleted.ShouldBeTrue();
+    }
+
+    private async Task<Guid> CreateTodoAsync(Guid userId, string description, string? notes = null)
+    {
+        var request = new
+        {
+            userId,
+            description,
+            notes,
+            labels = Array.Empty<string>(),
+            priority = 1
+        };
+
+        HttpResponseMessage response = await HttpClient.PostAsJsonAsync("todos", request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<Guid>();
     }
 }

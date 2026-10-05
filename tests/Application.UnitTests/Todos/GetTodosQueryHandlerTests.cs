@@ -1,4 +1,5 @@
 using Application.Abstractions.Authentication;
+using Application.Abstractions.Data;
 using Application.Todos.Get;
 using Application.UnitTests.Abstractions;
 using Domain.Todos;
@@ -119,13 +120,96 @@ public sealed class GetTodosQueryHandlerTests : BaseHandlerTest
     }
 
     [Fact]
+    public async Task Handle_Should_ApplySearchToDescription()
+    {
+        // Arrange
+        await using TestDbContext context = CreateDbContext();
+        await SeedTodosAsync(context);
+        GetTodosQueryHandler handler = CreateHandler(context);
+        var query = new GetTodosQuery(UserId, Search: "Completed");
+
+        // Act
+        Result<GetTodosResponse> result = await handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.TotalCount.ShouldBe(1);
+        result.Value.Items.Select(todo => todo.Id).ShouldBe([TodoId(2)]);
+    }
+
+    [Fact]
+    public async Task Handle_Should_ApplySearchToNotesAndTrimWhitespace()
+    {
+        // Arrange
+        await using TestDbContext context = CreateDbContext();
+        await SeedTodosAsync(context);
+        GetTodosQueryHandler handler = CreateHandler(context);
+        var query = new GetTodosQuery(UserId, Search: "  call Alice  ");
+
+        // Act
+        Result<GetTodosResponse> result = await handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.TotalCount.ShouldBe(1);
+        result.Value.Items.Select(todo => todo.Id).ShouldBe([TodoId(1)]);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Handle_Should_ReturnAllTodos_WhenSearchIsMissingOrBlank(string? search)
+    {
+        // Arrange
+        await using TestDbContext context = CreateDbContext();
+        await SeedTodosAsync(context);
+        GetTodosQueryHandler handler = CreateHandler(context);
+        var query = new GetTodosQuery(UserId, Search: search);
+
+        // Act
+        Result<GetTodosResponse> result = await handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.TotalCount.ShouldBe(3);
+        result.Value.Items.Count.ShouldBe(3);
+        result.Value.Items.ShouldAllBe(todo => todo.UserId == UserId);
+    }
+
+    [Theory]
+    [InlineData(true, "completed", 1)]
+    [InlineData(false, "incomplete", 2)]
+    public async Task Handle_Should_ComposeSearchWithCompletionFilterAndCountBeforePagination(
+        bool isCompleted,
+        string search,
+        int expectedCount)
+    {
+        // Arrange
+        await using TestDbContext context = CreateDbContext();
+        await SeedTodosAsync(context);
+        GetTodosQueryHandler handler = CreateHandler(context);
+        var query = new GetTodosQuery(UserId, isCompleted, Page: 1, PageSize: 1, Search: search);
+
+        // Act
+        Result<GetTodosResponse> result = await handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.TotalCount.ShouldBe(expectedCount);
+        result.Value.TotalPages.ShouldBe(expectedCount);
+        result.Value.Items.Count.ShouldBe(1);
+        result.Value.Items.ShouldAllBe(todo => todo.UserId == UserId && todo.IsCompleted == isCompleted);
+    }
+
+    [Fact]
     public async Task Handle_Should_ReturnUnauthorized_WhenUserIdDoesNotMatchContext()
     {
         // Arrange
         await using TestDbContext context = CreateDbContext();
         IUserContext userContext = Substitute.For<IUserContext>();
         userContext.UserId.Returns(Guid.NewGuid());
-        var handler = new GetTodosQueryHandler(context, userContext);
+        var handler = new GetTodosQueryHandler(context, userContext, new TestTodoSearch());
         var query = new GetTodosQuery(UserId, true);
 
         // Act
@@ -140,7 +224,16 @@ public sealed class GetTodosQueryHandlerTests : BaseHandlerTest
     {
         IUserContext userContext = Substitute.For<IUserContext>();
         userContext.UserId.Returns(UserId);
-        return new GetTodosQueryHandler(context, userContext);
+        return new GetTodosQueryHandler(context, userContext, new TestTodoSearch());
+    }
+
+    private sealed class TestTodoSearch : ITodoSearch
+    {
+        public IQueryable<TodoItem> Apply(IQueryable<TodoItem> todoItems, string search) =>
+            todoItems.Where(todoItem =>
+                todoItem.Description.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                todoItem.Notes != null &&
+                todoItem.Notes.Contains(search, StringComparison.OrdinalIgnoreCase));
     }
 
     private static Guid TodoId(int value) => Guid.Parse($"00000000-0000-0000-0000-{value:D12}");
@@ -156,6 +249,7 @@ public sealed class GetTodosQueryHandlerTests : BaseHandlerTest
                 Id = TodoId(1),
                 UserId = UserId,
                 Description = "Old incomplete todo",
+                Notes = "Remember to call Alice",
                 CreatedAt = firstCreated,
                 IsCompleted = false,
                 Priority = Priority.Normal

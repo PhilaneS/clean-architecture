@@ -16,7 +16,8 @@ internal sealed class Get : IEndpoint
             IQueryHandler<GetTodosQuery, GetTodosResponse> handler,
             CancellationToken cancellationToken,
             int page = 1,
-            int pageSize = 20) =>
+            int pageSize = 20,
+            string? search = null) =>
         {
             if (page < 1)
             {
@@ -34,7 +35,7 @@ internal sealed class Get : IEndpoint
                 });
             }
 
-            var query = new GetTodosQuery(userId, isCompleted, page, pageSize);
+            var query = new GetTodosQuery(userId, isCompleted, page, pageSize, search);
 
             Result<GetTodosResponse> result = await handler.Handle(query, cancellationToken);
 
