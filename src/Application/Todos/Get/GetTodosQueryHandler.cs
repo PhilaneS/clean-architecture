@@ -8,13 +8,13 @@ using SharedKernel;
 namespace Application.Todos.Get;
 
 internal sealed class GetTodosQueryHandler(IApplicationDbContext context, IUserContext userContext)
-    : IQueryHandler<GetTodosQuery, List<TodoResponse>>
+    : IQueryHandler<GetTodosQuery, GetTodosResponse>
 {
-    public async Task<Result<List<TodoResponse>>> Handle(GetTodosQuery query, CancellationToken cancellationToken)
+    public async Task<Result<GetTodosResponse>> Handle(GetTodosQuery query, CancellationToken cancellationToken)
     {
         if (query.UserId != userContext.UserId)
         {
-            return Result.Failure<List<TodoResponse>>(UserErrors.Unauthorized());
+            return Result.Failure<GetTodosResponse>(UserErrors.Unauthorized());
         }
 
         IQueryable<Domain.Todos.TodoItem> todoItems = context.TodoItems
@@ -25,7 +25,15 @@ internal sealed class GetTodosQueryHandler(IApplicationDbContext context, IUserC
             todoItems = todoItems.Where(todoItem => todoItem.IsCompleted == query.IsCompleted.Value);
         }
 
+        int totalCount = await todoItems.CountAsync(cancellationToken);
+        int totalPages = totalCount / query.PageSize + (totalCount % query.PageSize == 0 ? 0 : 1);
+        int skip = (int)Math.Min(((long)query.Page - 1) * query.PageSize, int.MaxValue);
+
         List<TodoResponse> todos = await todoItems
+            .OrderByDescending(todoItem => todoItem.CreatedAt)
+            .ThenByDescending(todoItem => todoItem.Id)
+            .Skip(skip)
+            .Take(query.PageSize)
             .Select(todoItem => new TodoResponse
             {
                 Id = todoItem.Id,
@@ -40,6 +48,6 @@ internal sealed class GetTodosQueryHandler(IApplicationDbContext context, IUserC
             })
             .ToListAsync(cancellationToken);
 
-        return todos;
+        return new GetTodosResponse(todos, query.Page, query.PageSize, totalCount, totalPages);
     }
 }

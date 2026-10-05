@@ -2,4 +2,8 @@
 
 namespace Application.Todos.Get;
 
-public sealed record GetTodosQuery(Guid UserId, bool? IsCompleted = null) : IQuery<List<TodoResponse>>;
+public sealed record GetTodosQuery(
+    Guid UserId,
+    bool? IsCompleted = null,
+    int Page = 1,
+    int PageSize = 20) : IQuery<GetTodosResponse>;

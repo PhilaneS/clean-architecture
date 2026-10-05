@@ -13,14 +13,32 @@ internal sealed class Get : IEndpoint
         app.MapGet("todos", async (
             Guid userId,
             bool? isCompleted,
-            IQueryHandler<GetTodosQuery, List<TodoResponse>> handler,
-            CancellationToken cancellationToken) =>
+            IQueryHandler<GetTodosQuery, GetTodosResponse> handler,
+            CancellationToken cancellationToken,
+            int page = 1,
+            int pageSize = 20) =>
         {
-            var query = new GetTodosQuery(userId, isCompleted);
+            if (page < 1)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["page"] = ["Page must be greater than or equal to 1."]
+                });
+            }
 
-            Result<List<TodoResponse>> result = await handler.Handle(query, cancellationToken);
+            if (pageSize < 1 || pageSize > 100)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["pageSize"] = ["Page size must be between 1 and 100."]
+                });
+            }
 
-            return result.Match(Results.Ok, CustomResults.Problem);
+            var query = new GetTodosQuery(userId, isCompleted, page, pageSize);
+
+            Result<GetTodosResponse> result = await handler.Handle(query, cancellationToken);
+
+            return result.Match<IResult>(() => Results.Ok(result.Value), CustomResults.Problem);
         })
         .WithTags(Tags.Todos)
         .RequireAuthorization();
